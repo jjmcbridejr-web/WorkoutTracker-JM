@@ -1,6 +1,6 @@
 {
-  "name": "Set Log",
-  "short_name": "Set Log",
+  "name": "Jay’s Workout Tracker",
+  "short_name": "Workout",
   "description": "Dumbbell workout tracker with rest timer and progressive overload prompts",
   "start_url": "./",
   "scope": "./",
