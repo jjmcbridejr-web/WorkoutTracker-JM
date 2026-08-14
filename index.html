@@ -142,6 +142,23 @@
   .session .detail div{padding:3px 0}
   .empty{color:var(--muted);font-size:14px;padding:26px 0;text-align:center}
 
+  .bwrow{display:flex;align-items:center;gap:12px;margin-top:16px}
+  .bwin{flex:1;display:flex;align-items:baseline;justify-content:center;gap:6px}
+  .bwin input{width:120px;text-align:center;font-family:'DM Mono',monospace;font-size:34px;
+              font-weight:500;border:1px solid var(--line);border-radius:12px;padding:8px 4px;
+              background:var(--bg);color:var(--ink)}
+  .bwin span{font-size:14px;color:var(--muted)}
+  .finish{display:block;width:100%;margin:6px 0 4px;height:54px;border-radius:14px;
+          background:var(--ink);color:var(--surface);font-size:16px;font-weight:600;text-align:center}
+  .finish:active{background:var(--accent)}
+  .donecard{background:var(--ink);color:var(--surface);border-radius:14px;padding:16px;margin-bottom:12px}
+  .donecard h3{margin:0;font-size:18px;font-weight:800;letter-spacing:-.02em}
+  .donecard .ds{font-size:13px;color:rgba(251,251,249,.7);margin-top:4px}
+  .donecard .lines{margin-top:12px;padding-top:12px;border-top:1px solid rgba(251,251,249,.2);font-size:14px}
+  .donecard .lines div{padding:3px 0}
+  .donecard .again{display:block;width:100%;margin-top:14px;padding:13px;border-radius:11px;
+                   background:rgba(251,251,249,.14);color:var(--surface);text-align:center;
+                   font-size:13px;font-weight:600;letter-spacing:.06em;text-transform:uppercase}
   .cards{display:flex;gap:8px;margin-bottom:14px}
   .card2{flex:1;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px}
   .card2 .v{font-size:20px;font-weight:500;letter-spacing:-.02em;margin-top:3px;
@@ -208,6 +225,7 @@
   <div id="dayform"></div>
   <div id="list"></div>
   <div id="addArea"></div>
+  <div id="finishArea"></div>
 </section>
 
 <section class="view" id="viewProg" role="tabpanel" hidden>
@@ -295,8 +313,10 @@ function save(){ return store.set(KEY,JSON.stringify(data)); }
 function $(id){ return document.getElementById(id); }
 function todayKey(){ var d=new Date();
   return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
-function prettyDate(k){ var p=k.split("-"),d=new Date(+p[0],+p[1]-1,+p[2]);
-  return k===todayKey()?"Today":d.toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"}); }
+function baseDate(k){ return k.split("#")[0]; }
+function sessionNo(k){ var p=k.split("#"); return p[1]?(" \u00b7 session "+p[1]):""; }
+function prettyDate(k){ var b=baseDate(k),p=b.split("-"),d=new Date(+p[0],+p[1]-1,+p[2]);
+  return (b===todayKey()?"Today":d.toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"}))+sessionNo(k); }
 function fmt(n){ return (Math.round(n*10)/10).toString().replace(/\.0$/,""); }
 function fmtVol(n){ return n>=10000?fmt(n/1000)+"k":fmt(n); }
 function toast(m){ var el=$("toast"); el.textContent=m; el.classList.add("on");
@@ -304,6 +324,20 @@ function toast(m){ var el=$("toast"); el.textContent=m; el.classList.add("on");
 function getDay(k){ for(var i=0;i<data.days.length;i++) if(data.days[i].key===k) return data.days[i]; return null; }
 function cur(){ return getDay(dayKey)||data.days[0]; }
 function session(k){ return data.sessions[k]||{day:null,sets:[]}; }
+function todaysKeys(){
+  var t=todayKey();
+  return Object.keys(data.sessions).filter(function(k){ return baseDate(k)===t; }).sort();
+}
+function activeKey(){
+  var ks=todaysKeys();
+  for(var i=0;i<ks.length;i++) if(!data.sessions[ks[i]].done) return ks[i];
+  return ks.length?nextKey():todayKey();
+}
+function nextKey(){
+  var t=todayKey(), n=2;
+  while(data.sessions[t+"#"+n]) n++;
+  return t+"#"+n;
+}
 function setsFor(k,id){ return session(k).sets.filter(function(s){ return s.exId===id; }); }
 function allDates(){ return Object.keys(data.sessions).filter(function(k){ return session(k).sets.length; }).sort().reverse(); }
 function exById(id){
@@ -326,14 +360,14 @@ function earnedPromotion(list,ex){
 function lastSessionFor(id){
   var dates=allDates(),t=todayKey();
   for(var i=0;i<dates.length;i++){
-    if(dates[i]===t) continue;
+    if(baseDate(dates[i])===t) continue;
     var m=setsFor(dates[i],id);
     if(m.length) return {date:dates[i],sets:m};
   }
   return null;
 }
 function suggestWeight(ex){
-  var mine=setsFor(todayKey(),ex.id);
+  var mine=setsFor(activeKey(),ex.id);
   if(mine.length) return mine[mine.length-1].weight;
   var last=lastSessionFor(ex.id);
   if(last) return earnedPromotion(last.sets,ex)?nextDumbbell(last.sets[0].weight):last.sets[0].weight;
@@ -456,10 +490,10 @@ function renderDayForm(){
 }
 
 function renderList(){
-  var k=todayKey(),c=$("list");
+  var k=activeKey(),c=$("list");
   c.innerHTML="";
   $("vol").textContent=fmtVol(session(k).sets.reduce(function(a,s){ return a+s.weight*s.reps; },0))+" lb";
-  if(dayForm){ $("addArea").innerHTML=""; return; }
+  if(dayForm){ $("addArea").innerHTML=""; $("finishArea").innerHTML=""; return; }
 
   var d=cur();
   if(!d.ex.length) c.innerHTML='<div class="empty">No exercises on this day yet.</div>';
@@ -512,6 +546,7 @@ function renderList(){
   });
 
   renderAddArea();
+  renderFinish();
 }
 
 function buildEntry(ex){
@@ -548,11 +583,11 @@ function buildEntry(ex){
 
   var btn=document.createElement("button");
   btn.className="logbtn";
-  btn.textContent="Log set "+(setsFor(todayKey(),ex.id).length+1);
+  btn.textContent="Log set "+(setsFor(activeKey(),ex.id).length+1);
   btn.onclick=function(){ logSet(ex); };
   wrap.appendChild(btn);
 
-  if(setsFor(todayKey(),ex.id).length){
+  if(setsFor(activeKey(),ex.id).length){
     var u=document.createElement("button");
     u.className="textlink"; u.textContent="Undo last set";
     u.onclick=function(){ undoSet(ex); };
@@ -638,6 +673,58 @@ function buildExForm(idx){
   return wrap;
 }
 
+function renderFinish(){
+  var c=$("finishArea"); c.innerHTML="";
+  if(dayForm||exForm) return;
+  var k=activeKey(), sess=session(k), ks=todaysKeys();
+
+  var doneToday=ks.filter(function(x){ return data.sessions[x].done; });
+  if(!sess.sets.length && doneToday.length){
+    var last=doneToday[doneToday.length-1], ds=session(last);
+    var vol=ds.sets.reduce(function(a,x){ return a+x.weight*x.reps; },0);
+    var d=getDay(ds.day);
+    var card=document.createElement("div");
+    card.className="donecard";
+    card.innerHTML='<h3>Session complete</h3><div class="ds"></div><div class="lines"></div>';
+    card.querySelector(".ds").textContent=(d?d.title:"Workout")+" \u00b7 "+ds.sets.length+" sets \u00b7 "+fmtVol(vol)+" lb";
+    var lines=card.querySelector(".lines"), seen=[];
+    ds.sets.forEach(function(x){ if(seen.indexOf(x.exId)===-1) seen.push(x.exId); });
+    seen.forEach(function(id){
+      var ex=exById(id), g=ds.sets.filter(function(x){ return x.exId===id; });
+      var row=document.createElement("div");
+      row.innerHTML='<b></b> <span class="num">'+g.map(function(x){ return fmt(x.weight)+"\u00d7"+x.reps; }).join("  ")+'</span>';
+      row.querySelector("b").textContent=(ex&&ex.name)||g[0].exName||"Removed exercise";
+      lines.appendChild(row);
+    });
+    var again=document.createElement("button");
+    again.className="again"; again.textContent="Start another session";
+    again.onclick=function(){
+      data.sessions[nextKey()]={day:dayKey,sets:[],done:false};
+      activeEx=null; save(); render(); toast("New session started");
+    };
+    card.appendChild(again);
+    c.appendChild(card);
+    return;
+  }
+
+  if(!sess.sets.length) return;
+
+  var vol=sess.sets.reduce(function(a,x){ return a+x.weight*x.reps; },0);
+  var b=document.createElement("button");
+  b.className="finish";
+  b.textContent="Finish workout \u00b7 "+sess.sets.length+" sets, "+fmtVol(vol)+" lb";
+  b.onclick=function(){
+    data.sessions[k].done=true;
+    data.sessions[k].endedAt=Date.now();
+    activeEx=null; exForm=null;
+    clearInterval(restTimer); restTimer=null; $("rest").hidden=true;
+    save(); render(); renderHist();
+    window.scrollTo(0,0);
+    toast("Session saved");
+  };
+  c.appendChild(b);
+}
+
 function renderAddArea(){
   var c=$("addArea"); c.innerHTML="";
   if(dayForm) return;
@@ -690,13 +777,13 @@ function toggleEx(ex){
   activeEx=(activeEx===ex.id)?null:ex.id;
   if(activeEx){
     entryW=suggestWeight(ex);
-    var mine=setsFor(todayKey(),ex.id);
+    var mine=setsFor(activeKey(),ex.id);
     entryR=mine.length?mine[mine.length-1].reps:ex.hi;
   }
   renderList();
 }
 function logSet(ex){
-  var k=todayKey();
+  var k=activeKey();
   if(!data.sessions[k]) data.sessions[k]={day:dayKey,sets:[]};
   data.sessions[k].day=dayKey;
   data.sessions[k].sets.push({id:Date.now()+"-"+Math.random().toString(36).slice(2,6),
@@ -704,7 +791,7 @@ function logSet(ex){
   save(); startRest(cur().rest); renderList(); renderHist();
 }
 function undoSet(ex){
-  var k=todayKey(),s=session(k).sets;
+  var k=activeKey(),s=session(k).sets;
   for(var i=s.length-1;i>=0;i--){ if(s[i].exId===ex.id){ s.splice(i,1); break; } }
   if(!s.length) delete data.sessions[k];
   save(); renderList(); renderHist(); toast("Set removed");
@@ -918,7 +1005,7 @@ function svgBars(pts,color){
   if(pts.length>1) s+='<text x="'+(W-R)+'" y="'+(H-7)+'" text-anchor="end" font-size="10" fill="#7C807A">'+pts[pts.length-1].label+'</text>';
   return s+'</svg>';
 }
-function shortDate(k){ var p=k.split("-"); return (+p[1])+"/"+(+p[2]); }
+function shortDate(k){ var p=baseDate(k).split("-"); return (+p[1])+"/"+(+p[2]); }
 
 /* ============ progress ============ */
 function e1rm(w,r){ return w*(1+r/30); }
@@ -1028,7 +1115,7 @@ function bwBox(){
   if(ws.length>1){
     var diff=ws[ws.length-1].y-ws[0].y;
     var cls=diff>0.2?"up":(diff<-0.2?"down":"");
-    sub=fmt(latest.y)+' lb · <span class="delta '+cls+'">'+(diff>=0?"+":"")+fmt(Math.round(diff*10)/10)+
+    sub=fmt(latest.y)+' lb \u00b7 <span class="delta '+cls+'">'+(diff>=0?"+":"")+fmt(Math.round(diff*10)/10)+
         ' lb</span> since '+shortDate(ws[0].date);
   } else if(ws.length===1){
     sub=fmt(latest.y)+" lb logged "+shortDate(latest.date)+".";
@@ -1036,33 +1123,53 @@ function bwBox(){
   box.innerHTML='<h4>Bodyweight</h4><div class="sub">'+sub+'</div>'+
                 (ws.length?svgLine(ws.map(function(p){ return {label:shortDate(p.date),y:p.y}; }),"#D6342C"):"");
 
-  if(bwDraft===null) bwDraft=data.weights[today]||(latest?latest.y:180);
+  var start=(data.weights[today]!==undefined)?data.weights[today]:(latest?latest.y:180);
+
   var row=document.createElement("div");
-  row.className="repline";
-  row.style.marginTop="14px";
-  row.innerHTML='<button class="step">–</button>'+
-    '<div class="repout"><div class="big num">'+fmt(bwDraft)+'<span style="font-size:14px;color:#7C807A"> lb</span></div>'+
-    '<div class="rng">'+(data.weights[today]?"logged today — saving overwrites it":"today\u2019s weigh-in")+'</div></div>'+
-    '<button class="step">+</button>';
+  row.className="bwrow";
+  row.innerHTML='<button class="step" aria-label="Lower">\u2013</button>'+
+    '<div class="bwin"><input type="text" inputmode="decimal" enterkeyhint="done" aria-label="Bodyweight in pounds"><span>lb</span></div>'+
+    '<button class="step" aria-label="Higher">+</button>';
+  var input=row.querySelector("input");
+  input.value=fmt(start);
+
+  function bump(d){
+    var v=parseFloat(input.value);
+    if(isNaN(v)) v=start;
+    v=Math.min(1000,Math.max(1,Math.round((v+d)*10)/10));
+    input.value=fmt(v);              /* update in place \u2014 no re-render, so the button survives */
+  }
   var st=row.querySelectorAll(".step");
-  st[0].onclick=function(){ bwDraft=Math.max(1,Math.round((bwDraft-0.2)*10)/10); renderProg(); };
-  st[1].onclick=function(){ bwDraft=Math.min(1000,Math.round((bwDraft+0.2)*10)/10); renderProg(); };
-  hold(st[0],function(){ bwDraft=Math.max(1,Math.round((bwDraft-0.2)*10)/10); renderProg(); });
-  hold(st[1],function(){ bwDraft=Math.min(1000,Math.round((bwDraft+0.2)*10)/10); renderProg(); });
+  st[0].addEventListener("click",function(){ bump(-0.2); });
+  st[1].addEventListener("click",function(){ bump(0.2); });
+  hold(st[0],function(){ bump(-0.2); });
+  hold(st[1],function(){ bump(0.2); });
+  input.addEventListener("keydown",function(e){ if(e.key==="Enter"){ this.blur(); commit(); } });
   box.appendChild(row);
 
+  var note=document.createElement("div");
+  note.className="sub"; note.style.margin="8px 4px 0";
+  note.textContent=(data.weights[today]!==undefined)
+    ? "Logged today \u2014 saving overwrites it."
+    : "Type it in, or use \u00b1 for 0.2 lb steps.";
+  box.appendChild(note);
+
+  function commit(){
+    var v=parseFloat(input.value);
+    if(isNaN(v)||v<=0){ toast("Enter a number"); return; }
+    v=Math.min(1000,Math.max(1,Math.round(v*10)/10));
+    data.weights[todayKey()]=v;
+    saveAll(); renderProg(); render(); toast("Bodyweight logged");
+  }
   var save=document.createElement("button");
   save.className="logbtn"; save.textContent="Log bodyweight";
-  save.onclick=function(){
-    data.weights[todayKey()]=bwDraft;
-    saveAll(); renderProg(); render(); toast("Bodyweight logged");
-  };
+  save.onclick=commit;
   box.appendChild(save);
 
-  if(data.weights[today]){
+  if(data.weights[today]!==undefined){
     var rm=document.createElement("button");
     rm.className="textlink"; rm.textContent="Remove today\u2019s weigh-in";
-    rm.onclick=function(){ delete data.weights[todayKey()]; bwDraft=null; saveAll(); renderProg(); render(); toast("Weigh-in removed"); };
+    rm.onclick=function(){ delete data.weights[todayKey()]; saveAll(); renderProg(); render(); toast("Weigh-in removed"); };
     box.appendChild(rm);
   }
   return box;
