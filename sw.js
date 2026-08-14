@@ -1,6 +1,6 @@
 /* Set Log service worker — bump CACHE on every app update */
-var CACHE = "setlog-2026-08-10";
-var SHELL = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"];
+var CACHE = "setlog-2026-08-13";
+var SHELL = ["./", "./index.html", "./manifest.json", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", function(e){
   self.skipWaiting();
